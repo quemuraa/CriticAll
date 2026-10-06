@@ -68,12 +68,34 @@ def salvar_obra(
         ))
 
 
-def listar_obras():
-    """Retorna todas as obras cadastradas, mais recentes primeiro."""
+def listar_obras(status=None):
+    """Retorna as obras cadastradas, podendo filtrar por status."""
     with get_conn() as conn:
         conn.row_factory = sqlite3.Row
-        cursor = conn.execute("SELECT * FROM obras ORDER BY criado_em DESC")
+
+        if status:
+            cursor = conn.execute(
+                "SELECT * FROM obras WHERE status = ? ORDER BY criado_em DESC",
+                (status,)
+            )
+        else:
+            cursor = conn.execute(
+                "SELECT * FROM obras ORDER BY criado_em DESC"
+            )
+
         return [dict(linha) for linha in cursor.fetchall()]
+
+
+def remover_obra(source, source_id):
+    with get_conn() as conn:
+        conn.execute(
+            """
+            DELETE FROM obras
+            WHERE source = ? AND source_id = ?
+            """,
+            (source, source_id)
+        )
+        conn.commit()    
 
 
 def buscar_obra_por_source(source: str, source_id: str):

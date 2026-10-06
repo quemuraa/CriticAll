@@ -5,7 +5,13 @@ import tmdb
 import json
 import math
 from rapidfuzz import fuzz
-from db import init_db, salvar_obra, listar_obras, buscar_obra_por_source
+from db import (
+    init_db,
+    salvar_obra,
+    listar_obras,
+    buscar_obra_por_source,
+    remover_obra,
+)
 from datetime import date
 
 FONTES = {
@@ -198,9 +204,50 @@ def mostrar_detalhes(obra):
     
     # Busca no banco: essa obra já foi salva antes?
     obra_salva = buscar_obra_por_source(obra["source"], obra["source_id"])
+
+    esta_na_watchlist = (
+        obra_salva is not None
+        and obra_salva["status"] == "watchlist"
+    )
+
+    texto_watchlist = (
+        "✓ Na Watchlist"
+        if esta_na_watchlist
+        else "🔖 Adicionar à Watchlist"
+    )
+
+    if st.button(
+        texto_watchlist,
+        key=f"watchlist_{obra['source']}_{obra['source_id']}"
+    ):
+        if esta_na_watchlist:
+            remover_obra(
+                obra["source"],
+                obra["source_id"]
+            )
+
+        else:
+            salvar_obra(
+                source=obra["source"],
+                source_id=obra["source_id"],
+                tipo=obra["tipo"],
+                status="watchlist",
+                titulo=obra["titulo"],
+                titulos_alternativos=json.dumps(
+                    obra.get("titulos_alternativos") or []
+                ),
+                sinopse=sinopse,
+                capa_url=obra["capa_url"],
+                ano_lancamento=obra["ano_lancamento"],
+                nota=None,
+                critica=None,
+                data_consumo=None,
+            )
+
+        st.rerun()
     
     # Valores padrão do formulário
-    if obra_salva:
+    if obra_salva and obra_salva["status"] == "watched":
         nota_inicial = f"{obra_salva['nota']:.1f}"
         critica_inicial = obra_salva["critica"] or ""
         # Extrai mês e ano da data salva (formato "AAAA-MM")
@@ -319,8 +366,10 @@ def mostrar_detalhes(obra):
         
         st.success(f"✅ {titulo_salvar} adicionado à biblioteca!")
 
-# Divide o app em duas abas
-tab_buscar, tab_biblioteca = st.tabs(["🔍 Buscar", "📖 Minha biblioteca"])
+# Divide o app em tres abas
+tab_buscar, tab_biblioteca, tab_watchlist = st.tabs(
+    ["🔍 Buscar", "📖 Minha biblioteca", "🔖 Watchlist"]
+)
 
 with tab_buscar:
     st.write("Tipos de obra:")
@@ -398,7 +447,7 @@ with tab_buscar:
                 st.divider()
 
 with tab_biblioteca:
-    obras = listar_obras()
+    obras = listar_obras("watched")
     
     if len(obras) == 0:
         st.info("📭 Você ainda não cadastrou nenhuma obra. Vai lá na aba Buscar e adiciona a primeira!")
@@ -443,3 +492,39 @@ with tab_biblioteca:
                         if st.button("📖 Detalhes", key=f"lib_btn_{obra['id']}", use_container_width=True):
                             mostrar_detalhes(obra)
     
+with tab_watchlist:
+    obras_watchlist = listar_obras("watchlist")
+
+    if len(obras_watchlist) == 0:
+        st.info("🔖 Sua Watchlist está vazia.")
+    else:
+        st.caption(f"Você tem {len(obras_watchlist)} obra(s) na Watchlist.")
+        st.divider()
+
+        colunas_por_linha = 8
+
+        for i in range(0, len(obras_watchlist), colunas_por_linha):
+            colunas = st.columns(colunas_por_linha)
+
+            for j, coluna in enumerate(colunas):
+                if i + j < len(obras_watchlist):
+                    obra = obras_watchlist[i + j]
+
+                    with coluna:
+                        st.markdown(
+                            f"""
+                            <div class="lib-header">
+                                <div class="lib-titulo">{obra['titulo']}</div>
+                            </div>
+
+                            <img class="lib-capa" src="{obra['capa_url']}">
+                            """,
+                            unsafe_allow_html=True,
+                        )
+
+                        if st.button(
+                            "📖 Detalhes",
+                            key=f"watch_btn_{obra['id']}",
+                            use_container_width=True,
+                        ):
+                            mostrar_detalhes(obra)
